@@ -17,3 +17,6 @@ graph.html
 # Python caches
 __pycache__/
 *.pyc
+
+# Caveman/skills installer lockfile
+skills-lock.json
