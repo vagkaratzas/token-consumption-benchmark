@@ -1,0 +1,8 @@
+[project]
+name = "taskflow"
+version = "0.1.0"
+description = "A small task-management app used as the benchmark codebase."
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
