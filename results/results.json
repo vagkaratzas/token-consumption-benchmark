@@ -1,0 +1,391 @@
+{
+  "meta": {
+    "date": "2026-06-14",
+    "tokenizer": "tiktoken o200k_base",
+    "scenarios": [
+      "baseline",
+      "serena",
+      "graphify",
+      "rtk",
+      "caveman",
+      "stacked"
+    ],
+    "n_tasks": 8,
+    "one_time_costs": {
+      "graphify_graph_bytes": 271589,
+      "graphify_note": "graph.json is built once and not ingested into context; only query results enter context.",
+      "serena_note": "LSP indexing happens once at server start; not a context cost."
+    },
+    "all_tools_run_for_real": true
+  },
+  "tasks": [
+    {
+      "id": "A1",
+      "category": "A",
+      "title": "Locate a class and list its methods",
+      "goal": "Find the TaskService class and enumerate its public methods.",
+      "reference_answer_tokens": 107,
+      "caveman_answer_tokens": 102,
+      "scenarios": {
+        "baseline": {
+          "input": 458,
+          "output": 107,
+          "total": 565,
+          "delta_pct": 0.0
+        },
+        "serena": {
+          "input": 55,
+          "output": 107,
+          "total": 162,
+          "delta_pct": -71.3
+        },
+        "graphify": {
+          "input": 206,
+          "output": 107,
+          "total": 313,
+          "delta_pct": -44.6
+        },
+        "rtk": {
+          "input": 450,
+          "output": 107,
+          "total": 557,
+          "delta_pct": -1.4
+        },
+        "caveman": {
+          "input": 458,
+          "output": 102,
+          "total": 560,
+          "delta_pct": -0.9
+        },
+        "stacked": {
+          "input": 55,
+          "output": 102,
+          "total": 157,
+          "delta_pct": -72.2
+        }
+      }
+    },
+    {
+      "id": "A2",
+      "category": "A",
+      "title": "Find all callers of a symbol",
+      "goal": "Find every place that calls NotificationService.notify.",
+      "reference_answer_tokens": 82,
+      "caveman_answer_tokens": 71,
+      "scenarios": {
+        "baseline": {
+          "input": 525,
+          "output": 82,
+          "total": 607,
+          "delta_pct": 0.0
+        },
+        "serena": {
+          "input": 293,
+          "output": 82,
+          "total": 375,
+          "delta_pct": -38.2
+        },
+        "graphify": {
+          "input": 141,
+          "output": 82,
+          "total": 223,
+          "delta_pct": -63.3
+        },
+        "rtk": {
+          "input": 518,
+          "output": 82,
+          "total": 600,
+          "delta_pct": -1.2
+        },
+        "caveman": {
+          "input": 525,
+          "output": 71,
+          "total": 596,
+          "delta_pct": -1.8
+        },
+        "stacked": {
+          "input": 293,
+          "output": 71,
+          "total": 364,
+          "delta_pct": -40.0
+        }
+      }
+    },
+    {
+      "id": "A3",
+      "category": "A",
+      "title": "Trace a call path API -> DB",
+      "goal": "Trace how creating a task via the API reaches the database write.",
+      "reference_answer_tokens": 129,
+      "caveman_answer_tokens": 118,
+      "scenarios": {
+        "baseline": {
+          "input": 1633,
+          "output": 129,
+          "total": 1762,
+          "delta_pct": 0.0
+        },
+        "serena": {
+          "input": 550,
+          "output": 129,
+          "total": 679,
+          "delta_pct": -61.5
+        },
+        "graphify": {
+          "input": 65,
+          "output": 129,
+          "total": 194,
+          "delta_pct": -89.0
+        },
+        "rtk": {
+          "input": 1592,
+          "output": 129,
+          "total": 1721,
+          "delta_pct": -2.3
+        },
+        "caveman": {
+          "input": 1633,
+          "output": 118,
+          "total": 1751,
+          "delta_pct": -0.6
+        },
+        "stacked": {
+          "input": 550,
+          "output": 118,
+          "total": 668,
+          "delta_pct": -62.1
+        }
+      }
+    },
+    {
+      "id": "B1",
+      "category": "B",
+      "title": "Run the test suite and summarize",
+      "goal": "Run the pytest suite and report pass/fail.",
+      "reference_answer_tokens": 44,
+      "caveman_answer_tokens": 43,
+      "scenarios": {
+        "baseline": {
+          "input": 132,
+          "output": 44,
+          "total": 176,
+          "delta_pct": 0.0
+        },
+        "serena": {
+          "input": 132,
+          "output": 44,
+          "total": 176,
+          "delta_pct": 0.0
+        },
+        "graphify": {
+          "input": 132,
+          "output": 44,
+          "total": 176,
+          "delta_pct": 0.0
+        },
+        "rtk": {
+          "input": 17,
+          "output": 44,
+          "total": 61,
+          "delta_pct": -65.3
+        },
+        "caveman": {
+          "input": 132,
+          "output": 43,
+          "total": 175,
+          "delta_pct": -0.6
+        },
+        "stacked": {
+          "input": 17,
+          "output": 43,
+          "total": 60,
+          "delta_pct": -65.9
+        }
+      }
+    },
+    {
+      "id": "B2",
+      "category": "B",
+      "title": "List the project structure",
+      "goal": "List all Python source files in the project.",
+      "reference_answer_tokens": 103,
+      "caveman_answer_tokens": 115,
+      "scenarios": {
+        "baseline": {
+          "input": 233,
+          "output": 103,
+          "total": 336,
+          "delta_pct": 0.0
+        },
+        "serena": {
+          "input": 233,
+          "output": 103,
+          "total": 336,
+          "delta_pct": 0.0
+        },
+        "graphify": {
+          "input": 233,
+          "output": 103,
+          "total": 336,
+          "delta_pct": 0.0
+        },
+        "rtk": {
+          "input": 104,
+          "output": 103,
+          "total": 207,
+          "delta_pct": -38.4
+        },
+        "caveman": {
+          "input": 233,
+          "output": 115,
+          "total": 348,
+          "delta_pct": 3.6
+        },
+        "stacked": {
+          "input": 104,
+          "output": 115,
+          "total": 219,
+          "delta_pct": -34.8
+        }
+      }
+    },
+    {
+      "id": "B3",
+      "category": "B",
+      "title": "Grep for deprecated API and TODOs",
+      "goal": "Find the deprecated old_token_hash function and all TODO/FIXME comments.",
+      "reference_answer_tokens": 66,
+      "caveman_answer_tokens": 60,
+      "scenarios": {
+        "baseline": {
+          "input": 100,
+          "output": 66,
+          "total": 166,
+          "delta_pct": 0.0
+        },
+        "serena": {
+          "input": 100,
+          "output": 66,
+          "total": 166,
+          "delta_pct": 0.0
+        },
+        "graphify": {
+          "input": 100,
+          "output": 66,
+          "total": 166,
+          "delta_pct": 0.0
+        },
+        "rtk": {
+          "input": 99,
+          "output": 66,
+          "total": 165,
+          "delta_pct": -0.6
+        },
+        "caveman": {
+          "input": 100,
+          "output": 60,
+          "total": 160,
+          "delta_pct": -3.6
+        },
+        "stacked": {
+          "input": 99,
+          "output": 60,
+          "total": 159,
+          "delta_pct": -4.2
+        }
+      }
+    },
+    {
+      "id": "C1",
+      "category": "C",
+      "title": "Explain the architecture",
+      "goal": "Explain the overall architecture and how the modules interact.",
+      "reference_answer_tokens": 271,
+      "caveman_answer_tokens": 257,
+      "scenarios": {
+        "baseline": {
+          "input": 3250,
+          "output": 271,
+          "total": 3521,
+          "delta_pct": 0.0
+        },
+        "serena": {
+          "input": 243,
+          "output": 271,
+          "total": 514,
+          "delta_pct": -85.4
+        },
+        "graphify": {
+          "input": 995,
+          "output": 271,
+          "total": 1266,
+          "delta_pct": -64.0
+        },
+        "rtk": {
+          "input": 3175,
+          "output": 271,
+          "total": 3446,
+          "delta_pct": -2.1
+        },
+        "caveman": {
+          "input": 3250,
+          "output": 257,
+          "total": 3507,
+          "delta_pct": -0.4
+        },
+        "stacked": {
+          "input": 243,
+          "output": 257,
+          "total": 500,
+          "delta_pct": -85.8
+        }
+      }
+    },
+    {
+      "id": "C2",
+      "category": "C",
+      "title": "Describe adding a feature end-to-end",
+      "goal": "Describe how to add a due-date field to tasks across all layers.",
+      "reference_answer_tokens": 202,
+      "caveman_answer_tokens": 179,
+      "scenarios": {
+        "baseline": {
+          "input": 1229,
+          "output": 202,
+          "total": 1431,
+          "delta_pct": 0.0
+        },
+        "serena": {
+          "input": 296,
+          "output": 202,
+          "total": 498,
+          "delta_pct": -65.2
+        },
+        "graphify": {
+          "input": 74,
+          "output": 202,
+          "total": 276,
+          "delta_pct": -80.7
+        },
+        "rtk": {
+          "input": 1189,
+          "output": 202,
+          "total": 1391,
+          "delta_pct": -2.8
+        },
+        "caveman": {
+          "input": 1229,
+          "output": 179,
+          "total": 1408,
+          "delta_pct": -1.6
+        },
+        "stacked": {
+          "input": 296,
+          "output": 179,
+          "total": 475,
+          "delta_pct": -66.8
+        }
+      }
+    }
+  ]
+}
