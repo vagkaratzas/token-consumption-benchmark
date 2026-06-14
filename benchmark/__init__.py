@@ -1,0 +1,1 @@
+"""Token-consumption benchmark harness."""
