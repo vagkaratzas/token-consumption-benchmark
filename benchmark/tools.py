@@ -55,7 +55,16 @@ def rtk_read(files: List[str]) -> str:
 
 # --------------------------------------------------------------------- graphify
 def graphify_build() -> str:
-    """Build the code graph once via tree-sitter (no LLM). Returns build log."""
+    """Build the code graph once via tree-sitter (no LLM). Returns build log.
+
+    The output dir is removed first so the build is deterministic — ``graphify
+    update`` otherwise merges into an existing graph, which makes results drift
+    slightly across repeated runs.
+    """
+    import shutil
+    out = REPO / "taskflow" / "graphify-out"
+    if out.exists():
+        shutil.rmtree(out)
     return run_cmd("graphify update taskflow --no-cluster", timeout=300)
 
 

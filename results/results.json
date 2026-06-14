@@ -12,7 +12,7 @@
     ],
     "n_tasks": 8,
     "one_time_costs": {
-      "graphify_graph_bytes": 271589,
+      "graphify_graph_bytes": 163726,
       "graphify_note": "graph.json is built once and not ingested into context; only query results enter context.",
       "serena_note": "LSP indexing happens once at server start; not a context cost."
     },
@@ -316,10 +316,10 @@
           "delta_pct": -85.4
         },
         "graphify": {
-          "input": 995,
+          "input": 993,
           "output": 271,
-          "total": 1266,
-          "delta_pct": -64.0
+          "total": 1264,
+          "delta_pct": -64.1
         },
         "rtk": {
           "input": 3175,
