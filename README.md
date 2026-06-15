@@ -1,6 +1,6 @@
 # token-consumption-benchmark
 
-Benchmark of tools that promise to cut the token consumption of agentic AI coding:
+A Claude Code (Opus 4.8 + ultracode) benchmark of tools that promise to cut the token consumption of agentic AI coding:
 **[serena](https://github.com/oraios/serena)** vs **[graphify](https://github.com/safishamsi/graphify)**
 vs **[rtk](https://github.com/rtk-ai/rtk)** vs **[caveman](https://github.com/juliusbrussee/caveman)**
 vs a no-tool baseline.
