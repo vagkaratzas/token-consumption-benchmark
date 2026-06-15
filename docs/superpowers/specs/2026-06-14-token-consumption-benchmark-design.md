@@ -7,11 +7,10 @@
 
 Quantify how much each of four "token-saving" code-context tools reduces the token
 consumption of an AI coding agent, relative to a no-tool baseline, on a standardized
-benchmark over a realistic dummy codebase. Produce a shareable Markdown report
-(team-internal and Hacker-News-ready) covering: what each tool does, whether and how
-well it tackles the problem, token consumption per scenario, percentage increase/decrease
-vs. baseline, **which combinations (if any) make more sense than a single tool, and which
-tools (if any) to avoid.**
+benchmark over a realistic dummy codebase. Produce a shareable Markdown report covering:
+what each tool does, whether and how well it tackles the problem, token consumption per
+scenario, percentage increase/decrease vs. baseline, **which combinations (if any) make
+more sense than a single tool, and which tools (if any) to avoid.**
 
 ## 2. Tools under test
 
