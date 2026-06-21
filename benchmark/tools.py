@@ -8,6 +8,8 @@ these strings. All tools are invoked for real.
 from __future__ import annotations
 
 import os
+import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -15,8 +17,12 @@ from typing import List
 
 REPO = Path(__file__).resolve().parent.parent
 GRAPH_PATH = REPO / "taskflow" / "graphify-out" / "graph.json"
+CODEGRAPH_DIR = REPO / "taskflow" / ".codegraph"
 CAVEMAN_DIR = REPO / ".agents" / "skills" / "caveman-compress"
 FIXTURES = REPO / "benchmark" / "fixtures" / "caveman"
+PONYTAIL_DIR = REPO / "benchmark" / "fixtures" / "ponytail"
+
+_ANSI = re.compile(r"\x1b\[[0-9;]*[mGKHF]")
 
 
 def _env() -> dict:
@@ -78,6 +84,68 @@ def _shell_quote(arg: str) -> str:
     if arg.startswith("--"):
         return arg
     return "'" + arg.replace("'", "'\\''") + "'"
+
+
+# -------------------------------------------------------------------- codegraph
+def codegraph_build() -> str:
+    """Build the codegraph index once (tree-sitter, SQLite, no LLM/API key).
+
+    The ``.codegraph`` dir is removed first so the index is deterministic across
+    repeated runs. Telemetry is disabled.
+    """
+    if CODEGRAPH_DIR.exists():
+        shutil.rmtree(CODEGRAPH_DIR)
+    return run_cmd("CODEGRAPH_TELEMETRY=0 codegraph init taskflow", timeout=300)
+
+
+def codegraph_run(argv: List[str]) -> str:
+    """Run a codegraph node/callers/explore/impact command; strip ANSI styling."""
+    quoted = " ".join(_shell_quote(a) for a in argv)
+    out = run_cmd(f"CODEGRAPH_TELEMETRY=0 codegraph {quoted} -p taskflow")
+    return _ANSI.sub("", out)
+
+
+# --------------------------------------------------------------------- ponytail
+def _call_claude(prompt: str) -> str:
+    """Send a prompt to the headless ``claude --print`` CLI and return stdout."""
+    claude_bin = shutil.which("claude") or "claude"
+    result = subprocess.run(
+        [claude_bin, "--print"], input=prompt, text=True,
+        capture_output=True, check=True, encoding="utf-8", errors="replace",
+    )
+    return result.stdout.strip()
+
+
+def ponytail_minify(task_id: str, code: str, regenerate: bool = False) -> str:
+    """Apply ponytail's real 'lazy senior dev' rules to a verbose implementation.
+
+    ponytail ships no headless CLI — it is a behavioural plugin (a rules prompt
+    that biases an agent toward minimal code). We *model* it by feeding its real
+    rule text plus a fixed baseline implementation to the ``claude`` CLI and
+    asking it to apply that philosophy, then cache the result as a committed
+    fixture so the token measurement reproduces without re-invoking a model.
+    """
+    PONYTAIL_DIR.mkdir(parents=True, exist_ok=True)
+    fixture = PONYTAIL_DIR / f"{task_id}.md"
+    if fixture.exists() and not regenerate:
+        return fixture.read_text(encoding="utf-8")
+    rules = (PONYTAIL_DIR / "rules.md").read_text(encoding="utf-8")
+    prompt = (
+        f"{rules}\n\n---\n\n"
+        "The ONLY feature requested is: add a `due_date` field to tasks so it can be set "
+        "when creating a task and is returned with the task. Nothing else was asked for.\n\n"
+        "Below is a verbose implementation another developer wrote for this request. Apply "
+        "the philosophy above and rewrite it as the minimum that delivers ONLY the requested "
+        "feature against the same codebase. Per the decision ladder, delete everything that "
+        "was not requested: speculative query helpers, derived properties, abstractions, and "
+        "defensive checks that aren't at a real trust boundary (YAGNI). Prefer one-liners and "
+        "fewest edits. Keep it correct and leave exactly ONE runnable check. Output ONLY the "
+        "resulting code (fenced blocks per file), no preamble or commentary.\n\n"
+        f"{code}"
+    )
+    out = _call_claude(prompt).strip()
+    fixture.write_text(out, encoding="utf-8")
+    return out
 
 
 # --------------------------------------------------------------------- caveman

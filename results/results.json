@@ -1,22 +1,36 @@
 {
   "meta": {
-    "date": "2026-06-14",
+    "date": "2026-06-21",
     "tokenizer": "tiktoken o200k_base",
     "scenarios": [
       "baseline",
       "serena",
       "graphify",
+      "codegraph",
       "rtk",
       "caveman",
+      "ponytail",
       "stacked"
     ],
-    "n_tasks": 8,
+    "n_tasks": 9,
     "one_time_costs": {
       "graphify_graph_bytes": 163726,
+      "codegraph_index_bytes": 422117,
       "graphify_note": "graph.json is built once and not ingested into context; only query results enter context.",
+      "codegraph_note": "codegraph builds a local SQLite index once; not ingested.",
       "serena_note": "LSP indexing happens once at server start; not a context cost."
     },
-    "all_tools_run_for_real": true
+    "tools_run_for_real": [
+      "serena",
+      "graphify",
+      "codegraph",
+      "rtk",
+      "caveman"
+    ],
+    "tools_modeled": [
+      "ponytail"
+    ],
+    "ponytail_note": "ponytail ships no headless CLI (behavioural plugin); modelled by applying its real rule text to a fixed baseline implementation via the claude CLI. Result cached as a committed fixture."
   },
   "tasks": [
     {
@@ -26,6 +40,8 @@
       "goal": "Find the TaskService class and enumerate its public methods.",
       "reference_answer_tokens": 107,
       "caveman_answer_tokens": 102,
+      "ponytail_answer_tokens": 107,
+      "codegen": false,
       "scenarios": {
         "baseline": {
           "input": 458,
@@ -45,17 +61,29 @@
           "total": 313,
           "delta_pct": -44.6
         },
-        "rtk": {
-          "input": 450,
+        "codegraph": {
+          "input": 240,
           "output": 107,
-          "total": 557,
-          "delta_pct": -1.4
+          "total": 347,
+          "delta_pct": -38.6
+        },
+        "rtk": {
+          "input": 473,
+          "output": 107,
+          "total": 580,
+          "delta_pct": 2.7
         },
         "caveman": {
           "input": 458,
           "output": 102,
           "total": 560,
           "delta_pct": -0.9
+        },
+        "ponytail": {
+          "input": 458,
+          "output": 107,
+          "total": 565,
+          "delta_pct": 0.0
         },
         "stacked": {
           "input": 55,
@@ -72,6 +100,8 @@
       "goal": "Find every place that calls NotificationService.notify.",
       "reference_answer_tokens": 82,
       "caveman_answer_tokens": 71,
+      "ponytail_answer_tokens": 82,
+      "codegen": false,
       "scenarios": {
         "baseline": {
           "input": 525,
@@ -91,6 +121,12 @@
           "total": 223,
           "delta_pct": -63.3
         },
+        "codegraph": {
+          "input": 49,
+          "output": 82,
+          "total": 131,
+          "delta_pct": -78.4
+        },
         "rtk": {
           "input": 518,
           "output": 82,
@@ -102,6 +138,12 @@
           "output": 71,
           "total": 596,
           "delta_pct": -1.8
+        },
+        "ponytail": {
+          "input": 525,
+          "output": 82,
+          "total": 607,
+          "delta_pct": 0.0
         },
         "stacked": {
           "input": 293,
@@ -118,6 +160,8 @@
       "goal": "Trace how creating a task via the API reaches the database write.",
       "reference_answer_tokens": 129,
       "caveman_answer_tokens": 118,
+      "ponytail_answer_tokens": 129,
+      "codegen": false,
       "scenarios": {
         "baseline": {
           "input": 1633,
@@ -137,6 +181,12 @@
           "total": 194,
           "delta_pct": -89.0
         },
+        "codegraph": {
+          "input": 432,
+          "output": 129,
+          "total": 561,
+          "delta_pct": -68.2
+        },
         "rtk": {
           "input": 1592,
           "output": 129,
@@ -148,6 +198,12 @@
           "output": 118,
           "total": 1751,
           "delta_pct": -0.6
+        },
+        "ponytail": {
+          "input": 1633,
+          "output": 129,
+          "total": 1762,
+          "delta_pct": 0.0
         },
         "stacked": {
           "input": 550,
@@ -164,6 +220,8 @@
       "goal": "Run the pytest suite and report pass/fail.",
       "reference_answer_tokens": 44,
       "caveman_answer_tokens": 43,
+      "ponytail_answer_tokens": 44,
+      "codegen": false,
       "scenarios": {
         "baseline": {
           "input": 132,
@@ -178,6 +236,12 @@
           "delta_pct": 0.0
         },
         "graphify": {
+          "input": 132,
+          "output": 44,
+          "total": 176,
+          "delta_pct": 0.0
+        },
+        "codegraph": {
           "input": 132,
           "output": 44,
           "total": 176,
@@ -195,6 +259,12 @@
           "total": 175,
           "delta_pct": -0.6
         },
+        "ponytail": {
+          "input": 132,
+          "output": 44,
+          "total": 176,
+          "delta_pct": 0.0
+        },
         "stacked": {
           "input": 17,
           "output": 43,
@@ -210,6 +280,8 @@
       "goal": "List all Python source files in the project.",
       "reference_answer_tokens": 103,
       "caveman_answer_tokens": 115,
+      "ponytail_answer_tokens": 103,
+      "codegen": false,
       "scenarios": {
         "baseline": {
           "input": 233,
@@ -224,6 +296,12 @@
           "delta_pct": 0.0
         },
         "graphify": {
+          "input": 233,
+          "output": 103,
+          "total": 336,
+          "delta_pct": 0.0
+        },
+        "codegraph": {
           "input": 233,
           "output": 103,
           "total": 336,
@@ -241,6 +319,12 @@
           "total": 348,
           "delta_pct": 3.6
         },
+        "ponytail": {
+          "input": 233,
+          "output": 103,
+          "total": 336,
+          "delta_pct": 0.0
+        },
         "stacked": {
           "input": 104,
           "output": 115,
@@ -256,6 +340,8 @@
       "goal": "Find the deprecated old_token_hash function and all TODO/FIXME comments.",
       "reference_answer_tokens": 66,
       "caveman_answer_tokens": 60,
+      "ponytail_answer_tokens": 66,
+      "codegen": false,
       "scenarios": {
         "baseline": {
           "input": 100,
@@ -275,6 +361,12 @@
           "total": 166,
           "delta_pct": 0.0
         },
+        "codegraph": {
+          "input": 100,
+          "output": 66,
+          "total": 166,
+          "delta_pct": 0.0
+        },
         "rtk": {
           "input": 99,
           "output": 66,
@@ -286,6 +378,12 @@
           "output": 60,
           "total": 160,
           "delta_pct": -3.6
+        },
+        "ponytail": {
+          "input": 100,
+          "output": 66,
+          "total": 166,
+          "delta_pct": 0.0
         },
         "stacked": {
           "input": 99,
@@ -302,6 +400,8 @@
       "goal": "Explain the overall architecture and how the modules interact.",
       "reference_answer_tokens": 271,
       "caveman_answer_tokens": 257,
+      "ponytail_answer_tokens": 271,
+      "codegen": false,
       "scenarios": {
         "baseline": {
           "input": 3250,
@@ -321,6 +421,12 @@
           "total": 1264,
           "delta_pct": -64.1
         },
+        "codegraph": {
+          "input": 1665,
+          "output": 271,
+          "total": 1936,
+          "delta_pct": -45.0
+        },
         "rtk": {
           "input": 3175,
           "output": 271,
@@ -332,6 +438,12 @@
           "output": 257,
           "total": 3507,
           "delta_pct": -0.4
+        },
+        "ponytail": {
+          "input": 3250,
+          "output": 271,
+          "total": 3521,
+          "delta_pct": 0.0
         },
         "stacked": {
           "input": 243,
@@ -348,6 +460,8 @@
       "goal": "Describe how to add a due-date field to tasks across all layers.",
       "reference_answer_tokens": 202,
       "caveman_answer_tokens": 179,
+      "ponytail_answer_tokens": 202,
+      "codegen": false,
       "scenarios": {
         "baseline": {
           "input": 1229,
@@ -367,6 +481,12 @@
           "total": 276,
           "delta_pct": -80.7
         },
+        "codegraph": {
+          "input": 77,
+          "output": 202,
+          "total": 279,
+          "delta_pct": -80.5
+        },
         "rtk": {
           "input": 1189,
           "output": 202,
@@ -379,11 +499,77 @@
           "total": 1408,
           "delta_pct": -1.6
         },
+        "ponytail": {
+          "input": 1229,
+          "output": 202,
+          "total": 1431,
+          "delta_pct": 0.0
+        },
         "stacked": {
           "input": 296,
           "output": 179,
           "total": 475,
           "delta_pct": -66.8
+        }
+      }
+    },
+    {
+      "id": "D1",
+      "category": "D",
+      "title": "Implement a due-date field across all layers",
+      "goal": "Write the code that adds a due_date field to tasks end-to-end.",
+      "reference_answer_tokens": 684,
+      "caveman_answer_tokens": 681,
+      "ponytail_answer_tokens": 400,
+      "codegen": true,
+      "scenarios": {
+        "baseline": {
+          "input": 1229,
+          "output": 684,
+          "total": 1913,
+          "delta_pct": 0.0
+        },
+        "serena": {
+          "input": 296,
+          "output": 684,
+          "total": 980,
+          "delta_pct": -48.8
+        },
+        "graphify": {
+          "input": 74,
+          "output": 684,
+          "total": 758,
+          "delta_pct": -60.4
+        },
+        "codegraph": {
+          "input": 77,
+          "output": 684,
+          "total": 761,
+          "delta_pct": -60.2
+        },
+        "rtk": {
+          "input": 1189,
+          "output": 684,
+          "total": 1873,
+          "delta_pct": -2.1
+        },
+        "caveman": {
+          "input": 1229,
+          "output": 681,
+          "total": 1910,
+          "delta_pct": -0.2
+        },
+        "ponytail": {
+          "input": 1229,
+          "output": 400,
+          "total": 1629,
+          "delta_pct": -14.8
+        },
+        "stacked": {
+          "input": 296,
+          "output": 400,
+          "total": 696,
+          "delta_pct": -63.6
         }
       }
     }

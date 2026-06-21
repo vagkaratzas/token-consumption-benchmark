@@ -4,9 +4,12 @@ Scenarios:
   baseline  - read whole files / run raw commands; full prose answer
   serena    - semantic symbol retrieval replaces file reads; full prose answer
   graphify  - code-graph queries replace file reads; full prose answer
+  codegraph - codegraph index queries replace file reads; full prose answer
   rtk       - command output / file reads piped through rtk; full prose answer
   caveman   - baseline input; answer compressed by the real caveman tool
-  stacked   - serena (code) or rtk (commands) for input + caveman output
+  ponytail  - baseline input; generated code minimised by ponytail's rules
+              (only bites on code-generation tasks; otherwise == baseline)
+  stacked   - best code/command input + best output (caveman, or ponytail on codegen)
 
 Each tool only changes the component it targets; the rest is held equal to
 baseline, isolating each tool's real contribution.
@@ -27,7 +30,8 @@ from benchmark.tokenizer import count_tokens
 
 REPO = Path(__file__).resolve().parent.parent
 RESULTS = REPO / "results"
-SCENARIOS = ["baseline", "serena", "graphify", "rtk", "caveman", "stacked"]
+SCENARIOS = ["baseline", "serena", "graphify", "codegraph", "rtk",
+             "caveman", "ponytail", "stacked"]
 
 
 def gather_serena(client: SerenaClient, calls) -> str:
@@ -47,18 +51,32 @@ def gather_graphify(argvs) -> str:
     return "\n".join(parts)
 
 
+def gather_codegraph(argvs) -> str:
+    parts = []
+    for argv in argvs:
+        parts.append(tools.codegraph_run(argv))
+    return "\n".join(parts)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--regenerate-caveman", action="store_true",
                     help="re-run the caveman compressor instead of using cached fixtures")
+    ap.add_argument("--regenerate-ponytail", action="store_true",
+                    help="re-run the ponytail minifier instead of using cached fixtures")
     args = ap.parse_args()
 
     RESULTS.mkdir(exist_ok=True)
 
-    print("[1/4] Building graphify code graph (tree-sitter, no LLM)...")
+    print("[1/4] Building code graphs (tree-sitter, no LLM)...")
     build_log = tools.graphify_build()
-    print("   ", build_log.strip().splitlines()[-1] if build_log.strip() else "(no output)")
+    print("    graphify:", build_log.strip().splitlines()[-1] if build_log.strip() else "(no output)")
     graph_bytes = tools.GRAPH_PATH.stat().st_size if tools.GRAPH_PATH.exists() else 0
+    cg_log = tools.codegraph_build()
+    cg_line = next((l for l in reversed(cg_log.strip().splitlines()) if "nodes" in l), "")
+    print("    codegraph:", cg_line.strip() or "(built)")
+    codegraph_bytes = sum(p.stat().st_size for p in tools.CODEGRAPH_DIR.rglob("*")
+                          if p.is_file()) if tools.CODEGRAPH_DIR.exists() else 0
 
     print("[2/4] Starting serena MCP server (LSP backend)...")
     serena = SerenaClient()
@@ -88,6 +106,13 @@ def main() -> int:
             else:
                 graphify_input = baseline_input
 
+            # codegraph
+            if task.codegraph_argv:
+                codegraph_text = gather_codegraph(task.codegraph_argv)
+                codegraph_input = count_tokens(codegraph_text)
+            else:
+                codegraph_input = baseline_input
+
             # rtk
             rtk_read_text = tools.rtk_read(task.rtk_read_files)
             rtk_cmd_text = "".join(tools.run_cmd(c) for c in task.rtk_commands)
@@ -96,21 +121,32 @@ def main() -> int:
             else:
                 rtk_input = baseline_input
 
-            # caveman
+            # caveman (compresses prose; leaves code blocks ~unchanged)
             cave_answer = tools.caveman_compress(
                 task.id, task.reference_answer, regenerate=args.regenerate_caveman)
             cave_output = count_tokens(cave_answer)
 
-            # stacked = serena (code tasks) or rtk (command tasks) + caveman output
+            # ponytail (minimises generated code; no-op on non-codegen tasks)
+            if task.codegen:
+                pony_answer = tools.ponytail_minify(
+                    task.id, task.reference_answer, regenerate=args.regenerate_ponytail)
+                pony_output = count_tokens(pony_answer)
+            else:
+                pony_output = base_output
+
+            # stacked = best input (serena for code / rtk for commands) + best output
+            # (ponytail on codegen tasks, otherwise caveman)
             stacked_input = serena_input if task.serena_calls else rtk_input
-            stacked_output = cave_output
+            stacked_output = pony_output if task.codegen else cave_output
 
             cells = {
                 "baseline": (baseline_input, base_output),
                 "serena": (serena_input, base_output),
                 "graphify": (graphify_input, base_output),
+                "codegraph": (codegraph_input, base_output),
                 "rtk": (rtk_input, base_output),
                 "caveman": (baseline_input, cave_output),
+                "ponytail": (baseline_input, pony_output),
                 "stacked": (stacked_input, stacked_output),
             }
 
@@ -132,6 +168,8 @@ def main() -> int:
                 "goal": task.goal,
                 "reference_answer_tokens": base_output,
                 "caveman_answer_tokens": cave_output,
+                "ponytail_answer_tokens": pony_output,
+                "codegen": task.codegen,
                 "scenarios": scen,
             })
     finally:
@@ -144,11 +182,17 @@ def main() -> int:
         "n_tasks": len(TASKS),
         "one_time_costs": {
             "graphify_graph_bytes": graph_bytes,
+            "codegraph_index_bytes": codegraph_bytes,
             "graphify_note": "graph.json is built once and not ingested into context; "
                              "only query results enter context.",
+            "codegraph_note": "codegraph builds a local SQLite index once; not ingested.",
             "serena_note": "LSP indexing happens once at server start; not a context cost.",
         },
-        "all_tools_run_for_real": True,
+        "tools_run_for_real": ["serena", "graphify", "codegraph", "rtk", "caveman"],
+        "tools_modeled": ["ponytail"],
+        "ponytail_note": "ponytail ships no headless CLI (behavioural plugin); modelled by "
+                         "applying its real rule text to a fixed baseline implementation via "
+                         "the claude CLI. Result cached as a committed fixture.",
     }
 
     print("[4/4] Writing results...")
