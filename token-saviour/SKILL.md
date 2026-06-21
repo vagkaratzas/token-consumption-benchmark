@@ -115,6 +115,19 @@ The four layers are independent, so combining one-per-layer is additive:
 - ❌ **Don't expect any output tool to move an input-heavy bill** — when you're reading lots of
   code, output is a small share; the code-read tool is what matters.
 
+### Install missing tools
+
+When a chosen tool is absent, read `references/tool_links.md` and install the smallest useful
+set:
+
+- Pick **one** code-retrieval tool: `serena` for symbol-aware comprehension/edits, or
+  `graphify` for graph navigation/impact work.
+- Add `rtk` only for noisy command loops.
+- Add `caveman` only when output brevity is the bottleneck.
+
+Never install both `serena` and `graphify` by default. For network installers or shell profile
+changes, request approval if the environment requires it.
+
 ---
 
 ## Tool quick-reference (commands)
