@@ -3,9 +3,10 @@
 Eight tasks across three categories, each modelling a realistic thing an agent
 is asked to do against the ``taskflow`` codebase:
 
-* A. comprehension / navigation  (input/code-retrieval heavy -> serena, graphify)
+* A. comprehension / navigation  (input/code-retrieval heavy -> serena, graphify, codegraph)
 * B. command / diagnostic        (command-output heavy        -> rtk)
-* C. explanation                 (output heavy                -> caveman)
+* C. explanation                 (prose-output heavy          -> caveman)
+* D. code generation             (code-output heavy           -> ponytail)
 
 Each task declares, for every scenario, exactly what artifact is produced:
 
@@ -15,7 +16,10 @@ Each task declares, for every scenario, exactly what artifact is produced:
 * ``rtk_commands``      : the rtk-proxied equivalents of ``baseline_commands``
 * ``serena_calls``      : MCP tool calls (None -> serena gives no benefit; falls back to baseline)
 * ``graphify_argv``     : graphify CLI invocations (None -> falls back to baseline)
-* ``reference_answer``  : the single canonical answer (the shared "output" component)
+* ``codegraph_argv``    : codegraph CLI invocations (None -> falls back to baseline)
+* ``reference_answer``  : the single canonical answer / artifact (the shared "output" component)
+* ``codegen``           : True for code-generation tasks, where the output is generated
+                         code that ponytail minimises (and caveman leaves ~unchanged)
 
 serena paths are relative to the ``taskflow`` project root (e.g.
 ``services/task_service.py``); baseline/rtk file paths are repo-relative
@@ -41,6 +45,8 @@ class Task:
     rtk_commands: List[str] = field(default_factory=list)
     serena_calls: Optional[List[dict]] = None
     graphify_argv: Optional[List[List[str]]] = None
+    codegraph_argv: Optional[List[List[str]]] = None
+    codegen: bool = False
 
 
 TASKS: List[Task] = [
@@ -57,6 +63,7 @@ TASKS: List[Task] = [
              "args": {"relative_path": "services/task_service.py", "depth": 1}},
         ],
         graphify_argv=[["explain", "TaskService"]],
+        codegraph_argv=[["node", "TaskService"]],
         reference_answer=(
             "TaskService is defined in taskflow/services/task_service.py. It creates and "
             "transitions tasks and notifies assignees of changes. Its methods are:\n"
@@ -84,6 +91,7 @@ TASKS: List[Task] = [
         ],
         graphify_argv=[["query", "Where is notify called and what calls it?",
                         "--budget", "800"]],
+        codegraph_argv=[["callers", "notify"]],
         reference_answer=(
             "NotificationService.notify (taskflow/services/notification_service.py) is "
             "called only from TaskService (taskflow/services/task_service.py), in three "
@@ -128,6 +136,7 @@ TASKS: List[Task] = [
                       "relative_path": "db.py", "include_body": True}},
         ],
         graphify_argv=[["path", "create_task", "Database"]],
+        codegraph_argv=[["node", "create_task"]],
         reference_answer=(
             "Creating a task flows through four layers:\n"
             "1. API: POST /tasks -> create_task handler in taskflow/api/routes_tasks.py "
@@ -232,6 +241,9 @@ TASKS: List[Task] = [
                         "What is the overall architecture and how do the api, services, "
                         "repositories, db and models layers interact?",
                         "--budget", "1200"]],
+        codegraph_argv=[["explore",
+                         "overall architecture how api services repositories db models "
+                         "layers interact", "--max-files", "3"]],
         reference_answer=(
             "taskflow is a small task-management application with a strict layered "
             "architecture: api/cli -> services -> repositories -> db.\n\n"
@@ -285,6 +297,7 @@ TASKS: List[Task] = [
                         "Where are task fields defined and how does creating a task flow "
                         "through models, services and the api?",
                         "--budget", "1000"]],
+        codegraph_argv=[["impact", "create_task"]],
         reference_answer=(
             "To add a due_date to tasks end-to-end:\n"
             "1. Model: add `due_date: Optional[str] = None` to the Task dataclass in "
@@ -300,6 +313,125 @@ TASKS: List[Task] = [
             "5. Tests: add a case to tests/test_task_service.py asserting the due_date round-"
             "trips through create_task and is present in the task dict.\n"
             "No DB schema change is required because Database stores arbitrary row dicts."
+        ),
+    ),
+    # ---------------------------------------------------------------- D1
+    Task(
+        id="D1",
+        category="D",
+        title="Implement a due-date field across all layers",
+        goal="Write the code that adds a due_date field to tasks end-to-end.",
+        codegen=True,
+        # Same context retrieval as C2 — the agent must see the same layers to
+        # implement the feature it described in C2.
+        baseline_files=[
+            "taskflow/models/task.py",
+            "taskflow/repositories/task_repo.py",
+            "taskflow/services/task_service.py",
+            "taskflow/api/routes_tasks.py",
+            "tests/test_task_service.py",
+        ],
+        rtk_read_files=[
+            "taskflow/models/task.py",
+            "taskflow/repositories/task_repo.py",
+            "taskflow/services/task_service.py",
+            "taskflow/api/routes_tasks.py",
+            "tests/test_task_service.py",
+        ],
+        serena_calls=[
+            {"tool": "get_symbols_overview", "args": {"relative_path": "models/task.py"}},
+            {"tool": "get_symbols_overview", "args": {"relative_path": "services/task_service.py"}},
+            {"tool": "get_symbols_overview", "args": {"relative_path": "api/routes_tasks.py"}},
+            {"tool": "find_symbol",
+             "args": {"name_path_pattern": "TaskService/create_task",
+                      "relative_path": "services/task_service.py", "include_body": True}},
+        ],
+        graphify_argv=[["query",
+                        "Where are task fields defined and how does creating a task flow "
+                        "through models, services and the api?",
+                        "--budget", "1000"]],
+        codegraph_argv=[["impact", "create_task"]],
+        # The "output" component for a codegen task is generated code. This is a
+        # representative *verbose* implementation — the kind a default agent emits:
+        # an unrequested is_overdue property, an overdue-query helper threaded
+        # through service + repo, defensive ISO parsing, and a multi-step test.
+        # caveman leaves code blocks ~unchanged; ponytail (lazy-senior-dev) trims
+        # the unrequested abstractions to the minimum that satisfies the feature.
+        reference_answer=(
+            "Add a `due_date` field to tasks across every layer.\n\n"
+            "```python\n"
+            "# taskflow/models/task.py\n"
+            "from datetime import datetime, timezone\n"
+            "from typing import Optional\n\n"
+            "@dataclass\n"
+            "class Task(BaseModel):\n"
+            "    title: str = \"\"\n"
+            "    description: str = \"\"\n"
+            "    status: Status = Status.TODO\n"
+            "    project_id: Optional[int] = None\n"
+            "    assignee_id: Optional[int] = None\n"
+            "    due_date: Optional[str] = None  # ISO-8601 date string\n\n"
+            "    @property\n"
+            "    def is_overdue(self) -> bool:\n"
+            "        if self.due_date is None:\n"
+            "            return False\n"
+            "        try:\n"
+            "            due = datetime.fromisoformat(self.due_date)\n"
+            "        except ValueError:\n"
+            "            return False\n"
+            "        return due < datetime.now(timezone.utc) and not self.is_done()\n"
+            "```\n\n"
+            "```python\n"
+            "# taskflow/services/task_service.py\n"
+            "    def create_task(\n"
+            "        self, title: str, project_id: int, assignee_id: Optional[int] = None,\n"
+            "        due_date: Optional[str] = None,\n"
+            "    ) -> Task:\n"
+            "        if due_date is not None:\n"
+            "            try:\n"
+            "                datetime.fromisoformat(due_date)\n"
+            "            except ValueError:\n"
+            "                raise ValidationError(f\"invalid due_date: {due_date!r}\")\n"
+            "        task = Task(title=title, project_id=project_id,\n"
+            "                    assignee_id=assignee_id, due_date=due_date)\n"
+            "        task = self.tasks.add(task)\n"
+            "        if assignee_id is not None:\n"
+            "            self.notifications.notify(assignee_id, f\"Assigned task {task.id}\")\n"
+            "        return task\n\n"
+            "    def overdue_tasks(self, project_id: int) -> List[Task]:\n"
+            "        return self.tasks.list_overdue(project_id)\n"
+            "```\n\n"
+            "```python\n"
+            "# taskflow/repositories/task_repo.py\n"
+            "    def list_overdue(self, project_id: int) -> List[Task]:\n"
+            "        return [t for t in self.list_by_project(project_id) if t.is_overdue]\n"
+            "```\n\n"
+            "```python\n"
+            "# taskflow/api/routes_tasks.py\n"
+            "    def create_task(app: App, body: dict) -> dict:\n"
+            "        due_date = body.get(\"due_date\")\n"
+            "        if due_date is not None and not isinstance(due_date, str):\n"
+            "            return {\"status\": 400, \"error\": \"due_date must be a string\"}\n"
+            "        task = app.services.tasks.create_task(\n"
+            "            title=body.get(\"title\", \"\"),\n"
+            "            project_id=body.get(\"project_id\"),\n"
+            "            assignee_id=body.get(\"assignee_id\"),\n"
+            "            due_date=due_date,\n"
+            "        )\n"
+            "        return {\"status\": 201, \"task\": task.to_dict()}\n"
+            "```\n\n"
+            "```python\n"
+            "# tests/test_task_service.py\n"
+            "def test_create_task_with_due_date():\n"
+            "    services = build_services()\n"
+            "    task = services.tasks.create_task(\n"
+            "        \"Write report\", project_id=1, assignee_id=7,\n"
+            "        due_date=\"2099-01-01T00:00:00+00:00\",\n"
+            "    )\n"
+            "    assert task.due_date == \"2099-01-01T00:00:00+00:00\"\n"
+            "    assert task.to_dict()[\"due_date\"] == \"2099-01-01T00:00:00+00:00\"\n"
+            "    assert task.is_overdue is False\n"
+            "```\n"
         ),
     ),
 ]

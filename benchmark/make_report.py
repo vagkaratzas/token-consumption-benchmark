@@ -2,6 +2,11 @@
 
 All numbers in the report are computed here from the results file, so the
 report can never drift from the data. Re-run after any benchmark change.
+
+The original comprehension/command/explanation suite (categories A/B/C, 8 tasks)
+is the *primary* aggregate so prior numbers stay comparable. Code-generation
+tasks (category D) are reported in a separate section, because that is the only
+layer ponytail exercises and adding it would otherwise re-baseline everything.
 """
 
 from __future__ import annotations
@@ -13,7 +18,12 @@ REPO = Path(__file__).resolve().parent.parent
 RESULTS = REPO / "results" / "results.json"
 OUT = REPO / "REPORT.md"
 
-SCEN = ["baseline", "serena", "graphify", "rtk", "caveman", "stacked"]
+# code-read input | command input | prose output | code output (+ stacked)
+SCEN = ["baseline", "serena", "graphify", "codegraph", "rtk",
+        "caveman", "ponytail", "stacked"]
+# tools shown in the primary (comprehension) tables; ponytail is ~0 there and
+# gets its own code-generation section instead.
+SCEN_MAIN = ["baseline", "serena", "graphify", "codegraph", "rtk", "caveman", "stacked"]
 CATS = {"A": "Navigation", "B": "Commands", "C": "Explanation"}
 
 
@@ -29,10 +39,12 @@ def main() -> int:
     data = json.loads(RESULTS.read_text())
     meta = data["meta"]
     tasks = data["tasks"]
+    orig = [t for t in tasks if t["category"] in CATS]      # original 8 (A/B/C)
+    codegen = [t for t in tasks if t.get("codegen")]        # category D
 
-    # ---- aggregates ----
+    # ---- aggregates over the original 8 ----
     agg = {s: {"input": 0, "output": 0, "total": 0} for s in SCEN}
-    for t in tasks:
+    for t in orig:
         for s in SCEN:
             c = t["scenarios"][s]
             agg[s]["input"] += c["input"]
@@ -42,9 +54,9 @@ def main() -> int:
     base_in = agg["baseline"]["input"]
     base_out = agg["baseline"]["output"]
 
-    # ---- per category ----
+    # ---- per category (original 8) ----
     cat = {ca: {s: 0 for s in SCEN} for ca in CATS}
-    for t in tasks:
+    for t in orig:
         for s in SCEN:
             cat[t["category"]][s] += t["scenarios"][s]["total"]
 
@@ -52,122 +64,168 @@ def main() -> int:
     add = L.append
 
     # ===================================================================== intro
-    add("# Do code-context tools actually cut agent tokens? A 5-way benchmark\n")
-    add("**serena vs graphify vs rtk vs caveman vs no-tool baseline** — measured on a "
-        "real codebase with the real tools.\n")
+    add("# Do code-context tools actually cut agent tokens? A 6-tool benchmark\n")
+    add("**serena vs graphify vs CodeGraph vs rtk vs caveman vs Ponytail vs a no-tool "
+        "baseline** — measured on a real codebase with the real tools.\n")
     add(f"_Generated {meta['date']} · tokenizer: {meta['tokenizer']} · "
-        f"{meta['n_tasks']} tasks × {len(SCEN)} scenarios · every tool installed and run for real._\n")
+        f"6 tools (+ a stacked combo) vs a no-tool baseline · "
+        f"{len(orig)} comprehension tasks + {len(codegen)} code-gen task · "
+        "5 tools run for real, 1 (Ponytail) modeled._\n")
 
     add("## TL;DR\n")
-    add("Four tools claim to reduce the tokens an AI coding agent burns. They attack "
-        "**different layers**, so we measured each on the layer it actually targets, across an "
-        f"{meta['n_tasks']}-task suite over a ~30-file Python app. Totals across all tasks "
-        "(input context + generated output), vs the no-tool baseline:\n")
-    add("| Tool | What it reduces | Total tokens | Δ vs baseline |")
-    add("|------|-----------------|-------------:|:-------------:|")
+    add("Six tools claim to cut the tokens an AI coding agent burns. They attack "
+        "**different layers** of the bill, so we measured each on the layer it actually "
+        f"targets, across an {len(orig)}-task comprehension suite over a ~30-file Python app "
+        "(plus a code-generation task for the one tool that needs it). Totals across the "
+        "comprehension suite (input context + generated output), vs the no-tool baseline:\n")
+    add("| Tool | Layer it targets | Total tokens | Δ vs baseline |")
+    add("|------|------------------|-------------:|:-------------:|")
     names = {
         "baseline": "**baseline** (no tool)",
         "serena": "**serena**",
         "graphify": "**graphify**",
+        "codegraph": "**CodeGraph**",
         "rtk": "**rtk**",
         "caveman": "**caveman**",
-        "stacked": "**serena + rtk + caveman** (stacked)",
+        "ponytail": "**Ponytail**",
+        "stacked": "**stacked** (serena + rtk + caveman)",
     }
     whatred = {
         "baseline": "—",
         "serena": "code-read **input** (LSP symbols)",
         "graphify": "code-read **input** (code graph)",
+        "codegraph": "code-read **input** (indexed graph)",
         "rtk": "command-output **input**",
-        "caveman": "generated **output** (terse replies)",
-        "stacked": "all three layers",
+        "caveman": "generated **prose output**",
+        "ponytail": "generated **code output**",
+        "stacked": "three layers at once",
     }
-    for s in SCEN:
+    for s in SCEN_MAIN:
         d = pct(agg[s]["total"], base_total)
         add(f"| {names[s]} | {whatred[s]} | {agg[s]['total']:,} | "
-            f"{'—' if s=='baseline' else fmt(d)} |")
+            f"{'—' if s == 'baseline' else fmt(d)} |")
+    add(f"| {names['ponytail']} | {whatred['ponytail']} | n/a here | "
+        "0% (no code generated) |")
     add("")
-    add(f"**Headline:** a semantic code-retrieval tool (serena **{fmt(pct(agg['serena']['total'], base_total))}** "
-        f"or graphify **{fmt(pct(agg['graphify']['total'], base_total))}**) is by far the biggest single lever. "
-        f"rtk (**{fmt(pct(agg['rtk']['total'], base_total))}** overall) and caveman "
-        f"(**{fmt(pct(agg['caveman']['total'], base_total))}** overall) look small in aggregate **only because "
-        "they target narrow slices** — but they're nearly free and stack cleanly: the combined stack hits "
-        f"**{fmt(pct(agg['stacked']['total'], base_total))}**. The four are complementary, not competing — "
-        "except serena vs graphify, which overlap (pick one).\n")
+    add("**Headline:** a semantic code-retrieval tool is by far the biggest single lever — "
+        f"serena **{fmt(pct(agg['serena']['total'], base_total))}**, graphify "
+        f"**{fmt(pct(agg['graphify']['total'], base_total))}**, CodeGraph "
+        f"**{fmt(pct(agg['codegraph']['total'], base_total))}** in aggregate. The three "
+        "*overlap* (all shrink code-read input — pick one), but they split the wins by "
+        "question type: serena on broad comprehension, graphify on call-path tracing, "
+        f"CodeGraph on pinpoint caller lookups. rtk (**{fmt(pct(agg['rtk']['total'], base_total))}** "
+        f"overall) and caveman (**{fmt(pct(agg['caveman']['total'], base_total))}**) look small "
+        "in aggregate **only because they target narrow slices** — but they're nearly free and "
+        f"stack cleanly: serena + rtk + caveman hits **{fmt(pct(agg['stacked']['total'], base_total))}**. "
+        "**Ponytail** is invisible on this suite (it cuts *generated code*, which comprehension "
+        "tasks don't produce) but trimmed a verbose implementation by **~40% in our illustration** "
+        "(authoring-dependent — see the code-generation section). Tools are complementary, not "
+        "competing — except the three code-read tools, which are mutually redundant.\n")
 
     # ===================================================================== tools
-    add("## The five scenarios\n")
-    add("| Scenario | Type | Layer | How we ran it |")
-    add("|----------|------|-------|---------------|")
-    add("| **baseline** | — | — | Read whole files with the OS; run raw shell commands; full prose answer. |")
-    add("| **serena** ([oraios/serena](https://github.com/oraios/serena)) | MCP server (LSP) | input: code | Drove its MCP tools `get_symbols_overview` / `find_symbol` / `find_referencing_symbols` over a stdio client instead of reading files. |")
-    add("| **graphify** ([safishamsi/graphify](https://github.com/safishamsi/graphify)) | CLI + code graph | input: code | Built the graph once with `graphify update` (tree-sitter, no LLM), then `query` / `explain` / `path`. |")
-    add("| **rtk** ([rtk-ai/rtk](https://github.com/rtk-ai/rtk)) | Rust CLI proxy | input: command output | Ran commands through `rtk read` / `rtk grep` / `rtk test` / `rtk find`. |")
-    add("| **caveman** ([juliusbrussee/caveman](https://github.com/juliusbrussee/caveman)) | output style compressor | output: replies | Compressed each answer with caveman's real compressor (its prompt + the `claude` CLI). |")
+    add("## The six tools (and the four layers)\n")
+    add("Token cost splits into four layers; a different tool owns each. The first two are "
+        "*input* (what enters context); the last two are *output* (what the model writes back).\n")
+    add("| Tool | Type | Layer | How we ran it |")
+    add("|------|------|-------|---------------|")
+    add("| **serena** ([oraios/serena](https://github.com/oraios/serena)) | MCP server (LSP) | "
+        "input: code | Drove its MCP tools `get_symbols_overview` / `find_symbol` / "
+        "`find_referencing_symbols` over a stdio client instead of reading files. |")
+    add("| **graphify** ([safishamsi/graphify](https://github.com/safishamsi/graphify)) | "
+        "CLI + code graph | input: code | Built the graph once with `graphify update` "
+        "(tree-sitter, no LLM), then `query` / `explain` / `path`. |")
+    add("| **CodeGraph** ([colbymchenry/codegraph](https://github.com/colbymchenry/codegraph)) | "
+        "CLI + indexed graph (SQLite) | input: code | Indexed once with `codegraph init`, then "
+        "`node` / `callers` / `impact` / `explore`. |")
+    add("| **rtk** ([rtk-ai/rtk](https://github.com/rtk-ai/rtk)) | Rust CLI proxy | "
+        "input: command output | Ran commands through `rtk read` / `rtk grep` / `rtk test` / "
+        "`rtk find`. |")
+    add("| **caveman** ([juliusbrussee/caveman](https://github.com/juliusbrussee/caveman)) | "
+        "output-style compressor | output: prose | Compressed each answer with caveman's real "
+        "compressor (its prompt + the `claude` CLI). |")
+    add("| **Ponytail** ([DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail)) | "
+        "behavioural plugin (rules) | output: code | Applied its real \"lazy senior dev\" rule "
+        "text to a fixed verbose implementation via the `claude` CLI (modeled — no headless CLI). |")
     add("")
-    add("The key insight: **serena/graphify/rtk shrink what goes *into* the context; caveman shrinks "
-        "what the model writes *out*.** Comparing them fairly means splitting every task's cost into "
-        "an input component and an output component, and letting each tool change only the component it targets.\n")
+    add("The key insight: **serena / graphify / CodeGraph / rtk shrink what goes *into* the "
+        "context; caveman and Ponytail shrink what the model writes *out* — caveman for prose, "
+        "Ponytail for code.** Comparing them fairly means splitting every task's cost into an "
+        "input component and an output component, and letting each tool change only the component "
+        "it targets.\n")
 
     # ============================================================== methodology
     add("## Methodology\n")
-    add("We do **not** run a live paid LLM (no API key). Instead we model the realistic agent workflow "
-        "for each task and **measure the real artifact each tool produces**, counted with one consistent "
-        "tokenizer. Every tool was installed and executed for real — *no tool was modeled from its docs* "
-        "(see `results/environment.md`).\n")
+    add("We do **not** run a live paid LLM (no API key). Instead we model the realistic agent "
+        "workflow for each task and **measure the real artifact each tool produces**, counted "
+        "with one consistent tokenizer.\n")
     add("For each task and scenario:\n")
-    add("```\ntotal = input_tokens + output_tokens\nΔ%   = (total_tool − total_baseline) / total_baseline\n```\n")
-    add("| Scenario | input_tokens | output_tokens |")
-    add("|----------|--------------|---------------|")
-    add("| baseline | full file reads + raw command output | full prose answer |")
-    add("| serena   | real symbol-retrieval output | full prose answer |")
-    add("| graphify | real code-graph query output | full prose answer |")
-    add("| rtk      | command output / file reads via rtk | full prose answer |")
-    add("| caveman  | full file reads + raw command output | real caveman-compressed answer |")
-    add("| stacked  | serena (code) or rtk (commands) | caveman-compressed answer |")
-    add("")
-    add("Each tool only changes its own component; the rest is held equal to baseline, which isolates "
-        "each tool's true contribution and makes the stack additive. **Tokenizer:** "
-        f"`{meta['tokenizer']}`, applied identically to every scenario — absolute counts are tokenizer-"
-        "dependent, but the *ratios* we report are robust. **caveman** is the only tool whose mechanism "
-        "is itself an LLM; we ran the real compressor via the `claude` CLI and committed its outputs as "
-        "fixtures (`benchmark/fixtures/caveman/`) so the measurement reproduces without re-invoking a model.\n")
+    add("```\ntotal = input_tokens + output_tokens\nΔ%   = (total_tool − total_baseline) / "
+        "total_baseline\n```\n")
+    add("Each tool only changes its own component; the rest is held equal to baseline, which "
+        "isolates each tool's true contribution and makes the stack additive. **Tokenizer:** "
+        f"`{meta['tokenizer']}`, applied identically to every scenario — absolute counts are "
+        "tokenizer-dependent, but the *ratios* we report are robust.\n")
+    add("**What \"run for real\" means per tool:**\n")
+    add("- **serena, graphify, CodeGraph, rtk** — installed and executed; we count their actual "
+        "output. Fully deterministic.\n")
+    add("- **caveman** — its mechanism *is* an LLM, so we ran the real compressor via the "
+        "`claude` CLI and committed the outputs as fixtures (`benchmark/fixtures/caveman/`); the "
+        "measurement reproduces without re-invoking a model.\n")
+    add("- **Ponytail** — ships **no headless CLI**; it is a behavioural plugin (a rules prompt "
+        "that biases an agent toward minimal code). We therefore **model** it: feed its *real* "
+        "rule text plus a fixed, representative verbose implementation to the `claude` CLI and "
+        "ask it to apply that philosophy, then commit the result as a fixture "
+        "(`benchmark/fixtures/ponytail/`). This is a comparison of two non-equivalent solutions "
+        "(verbose vs. minimal) — softer than the deterministic cells — so we keep it out of the "
+        "headline aggregate and flag it as illustrative.\n")
     gb = meta["one_time_costs"]["graphify_graph_bytes"]
+    cgb = meta["one_time_costs"]["codegraph_index_bytes"]
     add(f"**One-time costs (not counted as context tokens):** graphify builds a graph once "
-        f"(`graph.json`, {gb//1024} KB here) that is *not* ingested — only query results enter context; "
-        "serena indexes via its language server once at startup. rtk and caveman need no build.\n")
+        f"(`graph.json`, {gb // 1024} KB) and CodeGraph an SQLite index once "
+        f"(`.codegraph/`, {cgb // 1024} KB) — neither is ingested; only query results enter "
+        "context. serena indexes via its language server once at startup. rtk, caveman and "
+        "Ponytail need no build.\n")
 
     # ================================================================= codebase
     add("## The codebase & tasks\n")
-    add("`taskflow` is a deliberately realistic ~30-file Python task-manager (REST API + CLI) with a "
-        "strict `api/cli → services → repositories → db` layering, inheritance (`BaseModel`, "
-        "`BaseRepository`), cross-module call chains, a deprecated function, scattered TODO/FIXME "
-        "comments, and a green pytest suite. The 8 tasks span three categories:\n")
+    add("`taskflow` is a deliberately realistic ~30-file Python task-manager (REST API + CLI) "
+        "with a strict `api/cli → services → repositories → db` layering, inheritance "
+        "(`BaseModel`, `BaseRepository`), cross-module call chains, a deprecated function, "
+        "scattered TODO/FIXME comments, and a green pytest suite. The comprehension suite spans "
+        "three categories; one code-generation task is added for the output-code layer:\n")
     add("| # | Category | Task |")
     add("|---|----------|------|")
+    allcats = {**CATS, "D": "Code generation"}
     for t in tasks:
-        add(f"| {t['id']} | {CATS[t['category']]} | {t['title']} — {t['goal']} |")
+        add(f"| {t['id']} | {allcats[t['category']]} | {t['title']} — {t['goal']} |")
     add("")
 
     # ================================================================== results
-    add("## Results\n")
-    add("### Aggregate (all 8 tasks)\n")
+    add("## Results — comprehension suite (8 tasks)\n")
+    add("### Aggregate\n")
     add("| Scenario | Input | Output | Total | Δ total |")
     add("|----------|------:|-------:|------:|:-------:|")
-    for s in SCEN:
+    for s in SCEN_MAIN:
         d = "—" if s == "baseline" else fmt(pct(agg[s]["total"], base_total))
-        add(f"| {names[s].replace('**','')} | {agg[s]['input']:,} | {agg[s]['output']:,} | "
+        add(f"| {names[s].replace('**', '')} | {agg[s]['input']:,} | {agg[s]['output']:,} | "
             f"{agg[s]['total']:,} | {d} |")
+    add(f"| Ponytail | {agg['ponytail']['input']:,} | {agg['ponytail']['output']:,} | "
+        f"{agg['ponytail']['total']:,} | {fmt(pct(agg['ponytail']['total'], base_total))} |")
     add("")
-    add(f"Where the savings come from — **input** dropped {fmt(pct(agg['serena']['input'], base_in))} "
-        f"(serena) / {fmt(pct(agg['graphify']['input'], base_in))} (graphify) / "
-        f"{fmt(pct(agg['rtk']['input'], base_in))} (rtk); **output** dropped "
-        f"{fmt(pct(agg['caveman']['output'], base_out))} (caveman). Input is ~"
-        f"{round(base_in/base_total*100)}% of the baseline bill here, which is why input tools dominate.\n")
+    add(f"Where the savings come from — **code-read input** dropped "
+        f"{fmt(pct(agg['serena']['input'], base_in))} (serena) / "
+        f"{fmt(pct(agg['graphify']['input'], base_in))} (graphify) / "
+        f"{fmt(pct(agg['codegraph']['input'], base_in))} (CodeGraph); **command input** "
+        f"{fmt(pct(agg['rtk']['input'], base_in))} (rtk); **prose output** "
+        f"{fmt(pct(agg['caveman']['output'], base_out))} (caveman). Ponytail is flat here "
+        "(no code to minimise). Input is ~"
+        f"{round(base_in / base_total * 100)}% of the baseline bill on this suite, which is why "
+        "the code-read tools dominate.\n")
 
     add("### By category (total tokens, Δ vs baseline)\n")
     add("| Scenario | A · Navigation | B · Commands | C · Explanation |")
     add("|----------|:--------------:|:------------:|:---------------:|")
-    for s in SCEN:
+    for s in SCEN_MAIN:
         if s == "baseline":
             row = " | ".join(f"{cat[ca]['baseline']:,}" for ca in CATS)
             add(f"| baseline (abs) | {row} |")
@@ -175,119 +233,207 @@ def main() -> int:
         row = " | ".join(fmt(pct(cat[ca][s], cat[ca]["baseline"])) for ca in CATS)
         add(f"| {s} | {row} |")
     add("")
-    add("This is the real story: **navigation (A) → graphify wins; explanation (C) → serena wins; "
-        "commands (B) → rtk wins; everything else is ~0 for the tool outside its niche.**\n")
+    add("The real story: **navigation (A) → the code-read tools split it** (serena best at "
+        "listing a class's members, CodeGraph best at callers, graphify best at call paths); "
+        "**explanation (C) → serena/graphify**; **commands (B) → rtk**; everything else is ~0 "
+        "for the tool outside its niche.\n")
 
-    add("### Per task (total tokens; Δ% vs baseline for each tool)\n")
-    add("| Task | Baseline | serena | graphify | rtk | caveman | stacked |")
-    add("|------|---------:|:------:|:--------:|:---:|:-------:|:-------:|")
-    for t in tasks:
+    add("### Per task (total tokens; Δ% vs baseline)\n")
+    add("| Task | Baseline | serena | graphify | CodeGraph | rtk | caveman | stacked |")
+    add("|------|---------:|:------:|:--------:|:---------:|:---:|:-------:|:-------:|")
+    for t in orig:
         sc = t["scenarios"]
         bt = sc["baseline"]["total"]
         cells = " | ".join(fmt(sc[s]["delta_pct"]) for s in
-                           ["serena", "graphify", "rtk", "caveman", "stacked"])
+                           ["serena", "graphify", "codegraph", "rtk", "caveman", "stacked"])
         add(f"| {t['id']} {t['title']} | {bt:,} | {cells} |")
     add("")
 
+    # ============================================================ code-gen section
+    add("## Results — code generation (Ponytail's home turf)\n")
+    cg = codegen[0]
+    cgs = cg["scenarios"]
+    cg_base = cgs["baseline"]
+    add(f"Task **{cg['id']} — {cg['goal']}** The output here is *generated code*, not prose. "
+        f"The baseline is a representative verbose implementation ({cg['reference_answer_tokens']} "
+        "output tokens) — the kind a default agent emits: an unrequested `is_overdue` property, "
+        "an overdue-query helper threaded through service + repo, defensive parsing, and a "
+        "multi-assert test. Two output tools then act on that fixed artifact:\n")
+    add("| Scenario | Input | Output | Total | Δ total | What changed |")
+    add("|----------|------:|-------:|------:|:-------:|--------------|")
+    cg_rows = [
+        ("baseline", "whole-file reads + verbose code", ""),
+        ("serena", "code-read input only", "output unchanged"),
+        ("graphify", "code-read input only", "output unchanged"),
+        ("codegraph", "code-read input only", "output unchanged"),
+        ("caveman", "prose compressor on code", "keeps code blocks ~verbatim"),
+        ("ponytail", "YAGNI-minimised code", "drops unrequested scope"),
+        ("stacked", "serena input + Ponytail output", "both layers"),
+    ]
+    for s, _desc, note in cg_rows:
+        c = cgs[s]
+        d = "—" if s == "baseline" else fmt(c["delta_pct"])
+        add(f"| {s} | {c['input']:,} | {c['output']:,} | {c['total']:,} | {d} | {note} |")
+    add("")
+    pony_out_delta = pct(cg["ponytail_answer_tokens"], cg["reference_answer_tokens"])
+    cave_out_delta = pct(cg["caveman_answer_tokens"], cg["reference_answer_tokens"])
+    add(f"On the **output component alone**, Ponytail cut the implementation "
+        f"**{cg['reference_answer_tokens']} → {cg['ponytail_answer_tokens']} tokens "
+        f"({fmt(pony_out_delta)})** by deleting the speculative helpers and derived property the "
+        f"feature never asked for; **caveman barely moved it ({fmt(cave_out_delta)})** because it "
+        "compresses prose and leaves code blocks intact. That is the mirror image of the "
+        "comprehension suite, where caveman helps and Ponytail doesn't — they own different "
+        "*output* layers (prose vs. code). The code-read tools still help on the *input* side of "
+        "a codegen task, so the best stack here is a code-read tool **+ Ponytail** "
+        f"(**{fmt(cgs['stacked']['delta_pct'])}**).\n")
+    add("> ⚠️ **This number is illustrative, not a clean measurement.** Both sides are choices we "
+        "made: we *authored* the verbose baseline to contain typical scope creep, and the size of "
+        "Ponytail's cut depends on how much removable scope we assumed and how the rule prompt is "
+        "framed. Concretely, a \"preserve the existing behaviour\" framing trimmed only **−1.6%**, "
+        "while a \"deliver only the requested feature\" framing (the realistic one for a YAGNI "
+        "plugin) trimmed **−41.5%** — a 25× swing. We report the latter because it matches how "
+        "Ponytail is meant to be used (and its own \"~54% less code\" claim), but the honest read "
+        "is *direction and rough magnitude*, not a deterministic figure like the other tools'.\n")
+
     # ============================================================= key findings
     add("## Key findings\n")
-    add("1. **Semantic code retrieval is the big lever.** serena and graphify cut total tokens by "
-        f"~{abs(round(pct(agg['serena']['total'], base_total)))}% in aggregate — an order of magnitude "
-        "more than the output/command tools — because reading whole files to answer a question is the "
-        "single most wasteful thing an agent does. On the trace-a-call-path task, graphify replaced "
-        "**1,633 tokens of file reads with a 65-token path query (−89%)**.\n")
-    add("2. **serena and graphify split the wins by question type.** graphify (a queryable graph) "
-        "dominates *navigation*: callers (A2), call-path tracing (A3 −89%), feature-impact (C2 −81%). "
-        "serena (live LSP symbols) dominates *broad comprehension*: single-symbol overviews (A1 −71%) "
-        "and whole-architecture explanation (C1 −85%). They **overlap** — both reduce code-read input — "
-        "so installing both is mostly redundant.\n")
-    add("3. **rtk is a specialist, and that's fine.** It does ~nothing on code-comprehension tasks "
-        f"({fmt(pct(cat['A']['rtk'], cat['A']['baseline']))} on navigation) but owns command output: "
-        f"**{fmt(pct(cat['B']['rtk'], cat['B']['baseline']))} on the command category** "
-        "(−65% on the test run, −38% on the structure listing). Its wins scale with output *verbosity* — "
-        "on our small, green codebase command outputs are short, so this is a **lower bound**; rtk's own "
-        "60–90% figures assume noisy build logs and failing test dumps.\n")
-    add("4. **caveman is real but small here — and can backfire.** It compressed answers by "
-        f"~{abs(round(pct(agg['caveman']['output'], base_out)))}% overall, but on the terse, list-shaped "
-        "structure answer (B2) it *added* tokens by wrapping every filename in markdown backticks "
-        "(103 → 115). Our reference answers are already concise and filler-free — caveman's headline "
-        "~65–75% needs the chatty prose, hedging, and pleasantries that a verbose agent emits. Treat its "
-        "numbers here as a worst case.\n")
-    add("5. **The layers are additive.** Because each tool reduces a different component, the stack "
-        f"(serena + rtk + caveman) reaches **{fmt(pct(agg['stacked']['total'], base_total))}** — better than "
-        "any single tool — with no double-counting.\n")
+    add("1. **Semantic code retrieval is the big lever.** serena, graphify and CodeGraph each cut "
+        f"comprehension-suite tokens by ~{abs(round(pct(agg['serena']['total'], base_total)))}/"
+        f"{abs(round(pct(agg['graphify']['total'], base_total)))}/"
+        f"{abs(round(pct(agg['codegraph']['total'], base_total)))}% — an order of magnitude more "
+        "than the output/command tools — because reading whole files to answer a question is the "
+        "single most wasteful thing an agent does. On the trace-a-call-path task, graphify "
+        "replaced **1,633 tokens of file reads with a 65-token path query (−89%)**.\n")
+    add("2. **The three code-read tools overlap but split the wins by question type.** They "
+        "reduce the *same* layer, so installing more than one is mostly redundant — but each has "
+        f"a best event: **serena** on listing a class's members (A1 {fmt(orig[0]['scenarios']['serena']['delta_pct'])}) "
+        f"and whole-architecture explanation (C1 {fmt([t for t in orig if t['id']=='C1'][0]['scenarios']['serena']['delta_pct'])}); "
+        f"**graphify** on call-path tracing (A3 {fmt([t for t in orig if t['id']=='A3'][0]['scenarios']['graphify']['delta_pct'])}); "
+        f"**CodeGraph** on pinpoint caller lookups (A2 {fmt([t for t in orig if t['id']=='A2'][0]['scenarios']['codegraph']['delta_pct'])}, "
+        "the best single result on that task).\n")
+    add("3. **CodeGraph trades broad-query leanness for fewer follow-ups.** Its aggregate "
+        f"({fmt(pct(agg['codegraph']['total'], base_total))}) trails serena/graphify because its "
+        f"`explore` command returns *verbatim source* inline (C1 {fmt([t for t in orig if t['id']=='C1'][0]['scenarios']['codegraph']['delta_pct'])}, "
+        "vs serena's outline-only −85%). That's a deliberate design choice — it hands back the "
+        "code so the agent doesn't re-read — and our \"one retrieval per task\" rule doesn't "
+        "credit the follow-up reads it saves. On targeted lookups (`node`/`callers`/`impact`) "
+        "it's right there with the others.\n")
+    add("4. **rtk is a command-output specialist.** It does ~nothing on code-comprehension "
+        f"({fmt(pct(cat['A']['rtk'], cat['A']['baseline']))} on navigation) but owns command "
+        f"output: **{fmt(pct(cat['B']['rtk'], cat['B']['baseline']))} on the command category** "
+        "(−65% on the test run, −38% on the structure listing). Its wins scale with output "
+        "*verbosity* — our small green codebase has short command output, so this is a **lower "
+        "bound**; rtk's own 60–90% figures assume noisy build logs and failing test dumps.\n")
+    add("5. **caveman and Ponytail are mirror-image output tools.** caveman compresses *prose* "
+        f"(~{abs(round(pct(agg['caveman']['output'], base_out)))}% on answers, and it can even "
+        "*add* tokens on terse/list output by wrapping items in markdown). Ponytail minimises "
+        "*code* (**~40% in our illustration**, authoring-dependent — see the caveat in the "
+        "code-generation section) and is invisible on prose. Each is useless in the other's "
+        "lane — route by whether the output is prose or code.\n")
+    add("6. **The layers are additive.** Because each tool reduces a different component, stacking "
+        f"one per layer beats any single tool: serena + rtk + caveman = "
+        f"**{fmt(pct(agg['stacked']['total'], base_total))}** on comprehension; a code-read tool "
+        f"+ Ponytail ≈ **{fmt(cgs['stacked']['delta_pct'])}** on code generation (the code-read "
+        "half is measured; the Ponytail half is the illustrative cut above) — with no "
+        "double-counting.\n")
 
     # ====================================================== combos & avoid
     add("## Which combination — and what to avoid\n")
-    add("**Would a combination beat a single tool?** Yes. The tools sit on three independent layers "
-        "(code-read input / command-output input / generated output), so combining one-per-layer is "
-        "strictly additive:\n")
-    add("- 🥇 **Recommended stack: serena *or* graphify, + rtk, + caveman.** Best measured result "
-        f"(**{fmt(pct(agg['stacked']['total'], base_total))}**). Each owns a distinct slice; setup for rtk "
-        "and caveman is ~zero.\n")
-    add("- 🥈 **Just one tool? Pick the code-retrieval one** (serena or graphify) — it alone gets you "
-        f"~{abs(round(pct(agg['serena']['total'], base_total)))}% and is the only tool that moves the needle "
-        "on the dominant (code-reading) cost.\n")
-    add("- **serena vs graphify — choose by workload.** graphify if your agent mostly *navigates* "
-        "(impact analysis, call paths, 'who calls X', cross-repo); serena if it mostly *reads broadly and "
-        "edits* (serena also does semantic edits/renames, which graphify doesn't). graphify is read-only "
-        "and needs a graph rebuild on code change; serena needs a language server.\n")
+    add("**Would a combination beat a single tool?** Yes. The tools sit on four independent "
+        "layers (code-read input / command-output input / prose output / code output), so "
+        "combining one-per-layer is strictly additive:\n")
+    add("- 🥇 **Comprehension / navigation work:** *(serena **or** graphify **or** CodeGraph)* + "
+        f"**rtk** + **caveman**. Best measured result (**{fmt(pct(agg['stacked']['total'], base_total))}**). "
+        "Each owns a distinct slice; rtk and caveman cost ~zero to add.\n")
+    add("- 🥇 **Code-generation work:** *(a code-read tool)* + **Ponytail** "
+        f"(≈**{fmt(cgs['stacked']['delta_pct'])}** on the codegen task, with Ponytail's share "
+        "illustrative) — swap caveman→Ponytail because the output is code, not prose.\n")
+    add("- 🥈 **Just one tool? Pick a code-retrieval one** (serena / graphify / CodeGraph) — it "
+        f"alone gets you ~{abs(round(pct(agg['serena']['total'], base_total)))}% and is the only "
+        "lever that moves the dominant (code-reading) cost.\n")
+    add("- **Choosing among the three code-read tools:** graphify for *navigation* (impact, call "
+        "paths, 'who calls X'); serena for *broad reading + editing* (it also does semantic "
+        "edits/renames the graph tools can't); CodeGraph for a *batteries-included single binary* "
+        "that returns source inline (fewer follow-up reads). They're read-mostly; graphify/"
+        "CodeGraph need a rebuild on code change, serena needs a language server.\n")
     add("**What to avoid:**\n")
-    add("- ❌ **Don't run serena *and* graphify together** — they reduce the same component, so you pay "
-        "two integrations for one benefit. Pick one.\n")
-    add("- ❌ **Don't reach for rtk to fix comprehension cost** — it's ~0% there. Add it *for* command-heavy "
-        "loops (tests, builds, git, greps), where it's excellent.\n")
-    add("- ❌ **Don't expect caveman to move your bill on input-heavy work** "
-        f"({fmt(pct(agg['caveman']['total'], base_total))} overall), and watch it on terse/structured output. "
-        "It's a cheap complement for chatty, output-heavy chat — not a primary lever for codebase work.\n")
+    add("- ❌ **Don't run more than one code-read tool** (serena / graphify / CodeGraph) — they "
+        "reduce the same component, so you pay N integrations for one benefit. Pick one.\n")
+    add("- ❌ **Don't reach for rtk to fix comprehension cost** — it's ~0% there. Add it *for* "
+        "command-heavy loops (tests, builds, git, greps).\n")
+    add("- ❌ **Don't expect caveman to shrink code, or Ponytail to shrink prose** — each is ~0% "
+        "(or worse) outside its output lane.\n")
+    add("- ❌ **Don't expect either output tool to move an input-heavy bill** — when you're "
+        "reading lots of code, output is a small share; the code-read tool is what matters.\n")
 
     # ================================================================ appendix
     add("## Appendix: real before/after artifacts\n")
-    add("**A1 — \"list TaskService's methods.\"** Baseline reads the whole file (458 tokens). serena returns:\n")
-    add('```json\n{"Class": [{"TaskService": {"Method": ["__init__", "create_task", "assign_task", '
-        '"complete_task", "open_tasks"]}}]}\n```\n')
+    add("**A1 — \"list TaskService's methods.\"** Baseline reads the whole file (458 tokens). "
+        "serena returns:\n")
+    add('```json\n{"Class": [{"TaskService": {"Method": ["__init__", "create_task", '
+        '"assign_task", "complete_task", "open_tasks"]}}]}\n```\n')
     add("That's ~55 tokens — same answer, **−71%**.\n")
+    add("**A2 — \"who calls notify?\"** Baseline reads the file (525 tokens). CodeGraph returns "
+        "just the call sites (~49 tokens, **−78%**):\n")
+    add("```\nCallers of \"notify\" (3):\n  method create_task   services/task_service.py:21\n"
+        "  method assign_task   services/task_service.py:34\n"
+        "  method complete_task services/task_service.py:41\n```\n")
     add("**A3 — \"trace create-task to the DB write.\"** Baseline reads 5 files across 4 layers "
         "(1,633 tokens). graphify returns a path (~65 tokens, **−89%**):\n")
     add("```\nShortest path (3 hops):\n  .create_task() <--method-- TaskService <--calls-- "
         "build_services() --references--> Database\n```\n")
-    add("**caveman — \"add a due_date feature\" (C2).** Prose answer, compressed in place:\n")
-    add("> _before:_ \"…Because BaseModel.to_dict uses asdict, it is serialized automatically.\"\n")
-    add("> _after:_ \"…BaseModel.to_dict use asdict → serialize auto.\"\n")
+    add("**D1 — \"add a due_date field.\"** Ponytail rewrites the verbose implementation, deleting "
+        "the unrequested `is_overdue` property and `overdue_tasks`/`list_overdue` helpers:\n")
+    add("> _before:_ model property + service helper + repo helper + defensive parsing + 3-assert "
+        "test (684 tokens)\n")
+    add(f"> _after:_ field + passthrough + 2-assert test ({cg['ponytail_answer_tokens']} tokens, "
+        f"**{fmt(pony_out_delta)}** — illustrative; see the code-generation caveat)\n")
 
     # ============================================================== reproduce
     add("## Reproduce it yourself\n")
     add("```bash\n"
         "# 1. Harness deps\n"
         "uv venv .venv && uv pip install --python .venv/bin/python tiktoken pytest\n\n"
-        "# 2. Install the four tools\n"
+        "# 2. Install the tools\n"
         "uv tool install graphifyy\n"
         "uv tool install --python 3.13 serena-agent\n"
+        "npm i -g @colbymchenry/codegraph\n"
         "curl -fsSL https://raw.githubusercontent.com/rtk-ai/rtk/refs/heads/master/install.sh | sh\n"
-        "curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash\n\n"
+        "curl -fsSL https://raw.githubusercontent.com/JuliusBrussee/caveman/main/install.sh | bash\n"
+        "#   Ponytail is a behavioural plugin; its rule text is vendored at\n"
+        "#   benchmark/fixtures/ponytail/rules.md (from DietrichGebert/ponytail).\n\n"
         "# 3. Run + report\n"
         "PATH=\"$HOME/.local/bin:$PATH\" .venv/bin/python -m benchmark.run_benchmark\n"
         ".venv/bin/python -m benchmark.make_report\n"
         "```\n")
     add("Results are written to `results/results.json` and `results/results.csv`; this report is "
-        "regenerated from them. caveman compression reuses committed fixtures unless you pass "
-        "`--regenerate-caveman` (requires the `claude` CLI or an `ANTHROPIC_API_KEY`).\n")
+        "regenerated from them. caveman/Ponytail outputs reuse committed fixtures unless you pass "
+        "`--regenerate-caveman` / `--regenerate-ponytail` (requires the `claude` CLI).\n")
 
     # ============================================================ limitations
     add("## Limitations (read before believing the numbers)\n")
-    add("- **Modeled, not metered.** Token usage is computed from the *real artifacts each tool produces*, "
-        "not metered from a live LLM session. Real agents add reasoning, retries, and non-determinism; "
-        "exact totals will differ, but the relative picture is what we claim.\n")
-    add("- **One small, clean codebase.** ~30 files, all tests green. This **understates rtk** (short "
-        "command output) and **understates caveman** (concise answers, no filler to cut). Bigger/noisier "
+    add("- **Modeled, not metered.** Token usage is computed from the *real artifacts each tool "
+        "produces*, not metered from a live LLM session. Real agents add reasoning, retries, and "
+        "non-determinism; exact totals will differ, but the relative picture is what we claim.\n")
+    add("- **Ponytail is doubly modeled, and its % is authoring-dependent.** It has no headless "
+        "CLI, so we apply its real rules to a fixed verbose baseline via the `claude` CLI and "
+        "compare two non-equivalent solutions. Worse, *we* wrote the baseline's scope creep and "
+        "*we* framed the rule prompt — and those choices set the magnitude: a "
+        "\"preserve behaviour\" prompt gave −1.6%, a \"deliver only what was requested\" prompt "
+        "gave −41.5%. We report the latter as it matches Ponytail's intended use, but treat it as "
+        "directional illustration, not a measurement on par with the deterministic tools.\n")
+    add("- **One small, clean codebase.** ~30 files, all tests green. This **understates rtk** "
+        "(short command output) and **understates caveman** (concise answers). Bigger/noisier "
         "repos would widen their wins.\n")
-    add("- **One tokenizer.** Absolute counts vary by tokenizer; ratios are stable.\n")
-    add("- **Reference answers are ours.** Every input-side scenario shares one canonical answer, so the "
-        "input comparison is apples-to-apples; but a different answer style would shift caveman's numbers.\n")
-    add("- **One retrieval per task.** We count a single tool call (or file-read set) per task. A whole-file "
-        "read is self-contained, whereas a terse graph path may in practice need a follow-up query — so this "
-        "slightly favors the retrieval tools (serena/graphify). The effect is small relative to the gaps shown.\n")
-    add("- **Single run.** Deterministic for the input tools; caveman output is fixed via committed fixtures.\n")
+    add("- **CodeGraph's `explore` returns source by design.** That inflates its single-call cost "
+        "on broad-comprehension tasks but saves follow-up reads our one-retrieval-per-task rule "
+        "doesn't count — so its aggregate here is a conservative read of its real-session value.\n")
+    add("- **One tokenizer; reference answers are ours.** Absolute counts vary by tokenizer "
+        "(ratios are stable); every input-side scenario shares one canonical answer so the input "
+        "comparison is apples-to-apples.\n")
+    add("- **One retrieval per task; single run.** We count one tool call (or file-read set) per "
+        "task. Deterministic for the input tools; caveman/Ponytail outputs are fixed via "
+        "committed fixtures.\n")
 
     OUT.write_text("\n".join(L) + "\n")
     print(f"Wrote {OUT} ({len(L)} blocks)")

@@ -28,3 +28,7 @@ taskflow/graphify-out/
 # serena project cache
 .serena/
 taskflow/.serena/
+
+# codegraph index (built once by the harness; not ingested into context)
+.codegraph/
+taskflow/.codegraph/
