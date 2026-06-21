@@ -30,9 +30,11 @@ Match the tool to the layer the task actually stresses.
 | Generated **output** | Your own long, chatty replies | **caveman** | the input tools |
 | — | Tiny/one-off work | plain Read/Grep/Bash | everything (overhead > benefit) |
 
-> **First, check availability.** These are optional third-party tools. Run the relevant
-> `--help`/`--version` once; if a tool isn't installed, fall back to the next-best option in
-> its row (ultimately plain Read/Grep/Bash). Never pretend a tool ran — degrade gracefully.
+> **First, check availability.** These are optional third-party tools. Run the selected
+> tool's `--help`/`--version` once. If it is missing and the task is non-trivial, install only
+> that tool from `references/tool_links.md`, then verify it again. If the tool remains
+> unavailable, state the fallback and continue with the next-best option in its row
+> (ultimately plain Read/Grep/Bash). Never pretend a tool ran.
 
 ---
 
@@ -96,6 +98,19 @@ The layers are independent, so combining one-per-layer is additive:
   command-heavy loops.
 - ❌ **Don't expect caveman to move the bill on input-heavy codebase work** — it only shrinks
   *your* output, which is a small share when you're reading lots of code.
+
+### Install missing tools
+
+When a chosen tool is absent, read `references/tool_links.md` and install the smallest useful
+set:
+
+- Pick **one** code-retrieval tool: `serena` for symbol-aware comprehension/edits, or
+  `graphify` for graph navigation/impact work.
+- Add `rtk` only for noisy command loops.
+- Add `caveman` only when output brevity is the bottleneck.
+
+Never install both `serena` and `graphify` by default. For network installers or shell profile
+changes, request approval if the environment requires it.
 
 ---
 
